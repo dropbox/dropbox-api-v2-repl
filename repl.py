@@ -31,6 +31,12 @@ except ImportError as e:
     sys.stderr.write("To install IPython, try: sudo pip install ipython\n")
     sys.exit(1)
 
+if IPython.__version__.startswith('0.'):
+    sys.stderr.write("Your current IPython version is {}.\n".format(IPython.__version__))
+    sys.stderr.write("This script requires 1.0 or greater.\n")
+    sys.stderr.write("To upgrade IPython, try: sudo pip install ipython --upgrade\n")
+    sys.exit(1)
+
 def main():
     prog_name, args = sys.argv[0], sys.argv[1:]
 
