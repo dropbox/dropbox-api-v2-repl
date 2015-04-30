@@ -10,7 +10,7 @@ import json
 import sys
 import types
 
-if (3,4) <= sys.version_info < (4,0):
+if (3,3) <= sys.version_info < (4,0):
     import http.client as httplib
     import urllib.parse as urlparse
 elif (2,7) <= sys.version_info < (3,0):
