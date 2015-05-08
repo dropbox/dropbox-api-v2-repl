@@ -6,25 +6,25 @@ A Python REPL that lets you make calls to the Dropbox API v2.
 
 2. Put the access token in a file called `auth.json`:
 
-```json
-{
-    "access_token": "<insert-access-token-here>"
-}
-```
+    ```json
+    {
+        "access_token": "<insert-access-token-here>"
+    }
+    ```
 
 3. Run the command: `python repl.py auth.json`.
 
-```
-For help, type 'hint'
+    ```
+    For help, type 'hint'
 
-In [1]: hint
-Out[1]:
+    In [1]: hint
+    Out[1]:
 
-Use 'a' to make requests to the "api" server.
-Use 'c' to make requests to the "api-content" server.
+    Use 'a' to make requests to the "api" server.
+    Use 'c' to make requests to the "api-content" server.
 
-Examples:
-    a.rpc('files/get_metadata', path='/Camera Uploads')
-    c.up('files/upload', path='/faq.txt', mode='add', _b=b'What?')
-    c.down('files/download', path='/faq.txt', _h={'If-None-Match': 'W/"1234"'})
-```
+    Examples:
+        a.rpc('files/get_metadata', path='/Camera Uploads')
+        c.up('files/upload', path='/faq.txt', mode='add', _b=b'What?')
+        c.down('files/download', path='/faq.txt', _h={'If-None-Match': 'W/"1234"'})
+    ```
