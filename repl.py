@@ -4,11 +4,11 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import code
 import collections
 import contextlib
 import json
 import sys
-import types
 
 if (3,3) <= sys.version_info < (4,0):
     import http.client as httplib
@@ -23,36 +23,9 @@ else:
         .format(*sys.version_info[:2]))
     sys.exit(1)
 
-try:
-    import IPython
-except ImportError as e:
-    sys.stderr.write("Unable to import \"IPython\": {}\n".format(e))
-    sys.stderr.write("This script requires IPython to run.\n")
-    sys.stderr.write("To install IPython, try: sudo pip install ipython\n")
-    sys.exit(1)
-
-if IPython.__version__.startswith('0.'):
-    sys.stderr.write("Your current IPython version is {}.\n".format(IPython.__version__))
-    sys.stderr.write("This script requires 1.0 or greater.\n")
-    sys.stderr.write("To upgrade IPython, try: sudo pip install ipython --upgrade\n")
-    sys.exit(1)
-
 def main():
     prog_name, args = sys.argv[0], sys.argv[1:]
-
-    if len(args) == 0:
-        sys.stdout.write('\n')
-        sys.stdout.write("Usage: python {} <auth.json>\n".format(prog_name))
-        sys.stdout.write('\n')
-        sys.stdout.write("  <auth.json>: See ReadMe.md for information on how ot create this file.\n")
-        sys.stdout.write('\n')
-        sys.exit(1)
-
-    if len(args) != 1:
-        sys.stderr.write("Expecting exactly one argument.  Run with no arguments for help.\n")
-        sys.exit(1)
-
-    auth_file = args[0]
+    auth_file, repl = parse_args_or_exit(prog_name, sys.stderr, sys.stdout, args)
 
     try:
         access_token, host_suffix = load_auth_json(auth_file)
@@ -60,24 +33,23 @@ def main():
         sys.stderr.write("Error loading <auth-file> \"{}\": {}\n".format(auth_file, e))
         sys.exit(1)
 
-    ipython_symbols = dict(
+    repl_symbols = dict(
         a=Host(access_token, 'api' + host_suffix),
         c=Host(access_token, 'api-content' + host_suffix),
         hint=hint,
     )
-    ipython_module = types.ModuleType(str('v2'))
-
-    ipython = IPython.terminal.embed.InteractiveShellEmbed(display_banner=False)
-    ipython.confirm_exit = False
 
     print("")
     print("For help, type 'hint'")
-    ipython.mainloop(local_ns=ipython_symbols, module=ipython_module)
+    repl(repl_symbols)
 
 class Host(object):
     def __init__(self, access_token, hostname):
         self.access_token = access_token
         self.hostname = hostname
+
+    def __str__(self):
+        return "Host({!r})".format(self.hostname)
 
     def rpc(self, function, **kwargs):
         headers = self._copy_headers(kwargs, 'content-type')
@@ -211,6 +183,7 @@ hint = StringRepr('\n'.join([
     "    a.rpc('files/get_metadata', path='/Camera Uploads')",
     "    c.up('files/upload', path='/faq.txt', mode='add', _b=b'What?')",
     "    c.down('files/download', path='/faq.txt', _h={'If-None-Match': 'W/\"1234\"'})",
+    "",
 ]))
 
 def load_auth_json(auth_file):
@@ -228,7 +201,7 @@ def load_auth_json(auth_file):
         raise AuthJsonLoadError("not valid JSON: {}".format(e))
 
     if not isinstance(auth_json, dict):
-        raise LoadError("doesn't contain a JSON object at the top level")
+        raise AuthJsonLoadError("doesn't contain a JSON object at the top level")
 
     access_token = auth_json.get('access_token')
     if access_token is None:
@@ -247,6 +220,112 @@ def load_auth_json(auth_file):
 
 class AuthJsonLoadError(Exception):
     pass
+
+def parse_args_or_exit(prog_name, err, out, args):
+    remaining = []
+    repl_prev = None
+    repl_preference = None
+
+    def check_prev(arg):
+        if repl_prev is not None:
+            err.write("Duplicate/conflicting flags: \"{}\", \"-ri\".\n".format(repl_prev, arg))
+            err.write("Run with \"--help\" for more information.\n")
+            sys.exit(1)
+        return arg
+
+    for i in range(len(args)):
+        arg = args[i]
+        if arg.startswith('-'):
+            if arg == '-ri':
+                repl_prev = check_prev(arg)
+                repl_preference = 'ipython'
+            elif arg == '-rs':
+                repl_prev = check_prev(arg)
+                repl_preference = 'standard'
+            elif arg in ('-h', '--help'):
+                if len(args) != 1:
+                    err.write("\"{}\" must be used by itself.\n".format(arg))
+                    err.write("Run with \"--help\" for more information.\n")
+                    sys.exit(1)
+                print_usage(prog_name, out)
+                sys.exit(0)
+            else:
+                err.write("Invalid option: {}.\n".format(json.dumps(arg)))
+                err.write("Run with \"--help\" for more information.\n")
+                sys.exit(1)
+        else:
+            remaining.append(arg)
+
+    if len(remaining) == 0:
+        err.write("Missing <auth.json> argument.\n")
+        err.write("Run with \"--help\" for more information.\n")
+        sys.exit(1)
+
+    if len(remaining) != 1:
+        err.write("Expecting one non-option argument, got {}: {}"
+                  .format(len(remaining), ', '.join(map(json.dumps, remaining))))
+        err.write("Run with \"--help\" for more information.\n")
+        sys.exit(1)
+
+    auth_file = remaining[0]
+
+    # Load the appropriate REPL.
+    if repl_preference == 'ipython':
+        # IPython required.
+        repl = try_creating_ipython_repl(err)
+        if repl is None:
+            err.write("To fall back to the standard Python REPL, don't use the \"-ri\" option.\n")
+            sys.exit(1)
+    elif repl_preference == 'standard':
+        # Use the standard REPL.
+        repl = standard_repl
+    elif repl_preference is None:
+        # Try IPython.  If that fails, use the standard REPL.
+        repl = try_creating_ipython_repl(None)
+        if repl is None:
+            err.write("Unable to load IPython; falling back to the standard Python REPL.\n")
+            err.write("(Run with \"-ri\" to see details; run with \"-rs\" to hide this warning.)\n")
+            repl = standard_repl
+    else:
+        raise AssertionError("bad value: {!r}".format(repl_preference))
+
+    return auth_file, repl
+
+def standard_repl(symbols):
+    code.interact(banner='', local=symbols)
+
+def try_creating_ipython_repl(err):
+    try:
+        import IPython
+        if IPython.__version__.startswith('0.'):
+            if err is not None:
+                err.write("The current IPython version is {}, but this script requires at least 1.0.\n"
+                          .format(IPython.__version__))
+                err.write("To upgrade IPython, try: \"sudo pip install ipython --upgrade\"\n")
+            return None
+
+        def repl(symbols):
+            ipython = IPython.terminal.interactiveshell.TerminalInteractiveShell(
+                    user_ns=symbols,
+                    )
+            ipython.confirm_exit = False
+            ipython.interact()
+        return repl
+
+    except ImportError as e:
+        if err is not None:
+            err.write("Unable to import \"IPython\": {}\n".format(e))
+            err.write("To install IPython, try: \"sudo pip install ipython\"\n")
+        return None
+
+def print_usage(prog_name, out):
+    out.write("Usage: {} [options...] <auth.json>\n")
+    out.write("\n")
+    out.write("    <auth-json>: See ReadMe.md for information on how to create this file.\n")
+    out.write("\n")
+    out.write("    -ri: Use IPython for the REPL.\n")
+    out.write("    -rs: Use the standard Python REPL.\n")
+    out.write("\n")
 
 if __name__ == '__main__':
     main()
