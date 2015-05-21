@@ -35,7 +35,7 @@ def main():
 
     repl_symbols = dict(
         a=Host(access_token, 'api' + host_suffix),
-        c=Host(access_token, 'api-content' + host_suffix),
+        c=Host(access_token, 'content' + host_suffix),
         hint=hint,
     )
 
@@ -165,7 +165,7 @@ class Response(object):
         for key, value in self.headers.items():
             r.append("{}: {!r}".format(key, value))
         if self.result is not None:
-            r.append(json.dumps(self.result, indent=4))
+            r.append(json.dumps(self.result, ensure_ascii=False, indent=4))
         if self.content is not None:
             r.append("<{} bytes> {!r}".format(len(self.content), self.content[:50]))
         return '\n'.join(r)
@@ -177,7 +177,7 @@ class StringRepr(object):
 hint = StringRepr('\n'.join([
     "",
     "Use 'a' to make requests to the \"api\" server.",
-    "Use 'c' to make requests to the \"api-content\" server.",
+    "Use 'c' to make requests to the \"content\" server.",
     "",
     "Examples:",
     "    a.rpc('files/get_metadata', path='/Camera Uploads')",
@@ -203,23 +203,29 @@ def load_auth_json(auth_file):
     if not isinstance(auth_json, dict):
         raise AuthJsonLoadError("doesn't contain a JSON object at the top level")
 
-    access_token = auth_json.get('access_token')
+    access_token = auth_json.pop('access_token', None)
     if access_token is None:
         raise AuthJsonLoadError("missing field \"access_token\"")
 
-    host = auth_json.get('host')
-    if host == 'dropbox.com':
-        host = None
+    host_suffix = auth_json.pop('host_suffix', None)
 
-    if host is None:
-        host_suffix = '.dropbox.com'
-    else:
-        host_suffix = '-' + host
+    if host_suffix is None:
+        host_suffix = '.dropboxapi.com'
+
+    if len(auth_json) > 0:
+        raise AuthJsonLoadError("unexpected fields: {}".format(devql(auth_json.keys())))
 
     return access_token, host_suffix
 
 class AuthJsonLoadError(Exception):
     pass
+
+def devq(s):
+    assert isinstance(s, unicode), repr(s)
+    return json.dumps(s)
+
+def devql(l):
+    return ', '.join(map(devq, l))
 
 def parse_args_or_exit(prog_name, err, out, args):
     remaining = []
@@ -250,7 +256,7 @@ def parse_args_or_exit(prog_name, err, out, args):
                 print_usage(prog_name, out)
                 sys.exit(0)
             else:
-                err.write("Invalid option: {}.\n".format(json.dumps(arg)))
+                err.write("Invalid option: {}.\n".format(devq(arg)))
                 err.write("Run with \"--help\" for more information.\n")
                 sys.exit(1)
         else:
@@ -263,7 +269,7 @@ def parse_args_or_exit(prog_name, err, out, args):
 
     if len(remaining) != 1:
         err.write("Expecting one non-option argument, got {}: {}"
-                  .format(len(remaining), ', '.join(map(json.dumps, remaining))))
+                  .format(len(remaining), devql(remaining)))
         err.write("Run with \"--help\" for more information.\n")
         sys.exit(1)
 
@@ -305,9 +311,7 @@ def try_creating_ipython_repl(err):
             return None
 
         def repl(symbols):
-            ipython = IPython.terminal.interactiveshell.TerminalInteractiveShell(
-                    user_ns=symbols,
-                    )
+            ipython = IPython.terminal.interactiveshell.TerminalInteractiveShell(user_ns=symbols)
             ipython.confirm_exit = False
             ipython.interact()
         return repl
