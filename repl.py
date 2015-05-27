@@ -13,6 +13,7 @@ import sys
 if (3,3) <= sys.version_info < (4,0):
     import http.client as httplib
     import urllib.parse as urlparse
+    unicode = str
 elif (2,7) <= sys.version_info < (3,0):
     import httplib
     import urllib as urlparse
@@ -206,11 +207,15 @@ def load_auth_json(auth_file):
     access_token = auth_json.pop('access_token', None)
     if access_token is None:
         raise AuthJsonLoadError("missing field \"access_token\"")
+    elif not isinstance(access_token, unicode):
+        raise AuthJsonLoadError("expecting \"access_token\" to be a string");
 
     host_suffix = auth_json.pop('host_suffix', None)
 
     if host_suffix is None:
         host_suffix = '.dropboxapi.com'
+    elif not isinstance(host_suffix, unicode):
+        raise AuthJsonLoadError("expecting \"host_suffix\" to be a string");
 
     if len(auth_json) > 0:
         raise AuthJsonLoadError("unexpected fields: {}".format(devql(auth_json.keys())))
