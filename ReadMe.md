@@ -21,7 +21,7 @@ A Python REPL that lets you make calls to the Dropbox API v2.
     Out[1]:
 
     Use 'a' to make requests to the "api" server.
-    Use 'c' to make requests to the "api-content" server.
+    Use 'c' to make requests to the "content" server.
 
     Examples:
         a.rpc('files/get_metadata', path='/Camera Uploads')
