@@ -52,27 +52,45 @@ class Host(object):
     def __str__(self):
         return "Host({!r})".format(self.hostname)
 
-    def rpc(self, function, **kwargs):
+    @classmethod
+    def _make_api_arg(cls, args, kwargs):
+        if len(args) == 0:
+            if len(kwargs) == 0:
+                return None
+            return kwargs
+        elif len(args) == 1:
+            arg = args[0]
+            if len(kwargs) != 0:
+                raise AssertionError(
+                    "You provided an explicit argument {!r} as well as keyword-style arguments "
+                    "{!r}.  You can't provide both.".format(arg, kwargs))
+            return arg
+        else:
+            raise AssertionError("Too many non-keyword arguments: {!r}".format(args))
+
+    def rpc(self, function, *args, **kwargs):
         headers = self._copy_headers(kwargs, 'content-type')
 
         assert '_b' not in kwargs, "Not expecting body value '_b'"
 
         headers['Content-Type'] = 'application/json'
-        body = json.dumps(kwargs, ensure_ascii=False).encode('utf-8')
+        api_arg = self._make_api_arg(args, kwargs)
+        body = json.dumps(api_arg, ensure_ascii=False).encode('utf-8')
 
         with self._request('POST', function, headers, body=body) as r:
             if r.status == 200:
                 return self._handle_json_body(r)
             return self._handle_error(r)
 
-    def up(self, function, **kwargs):
+    def up(self, function, *args, **kwargs):
         headers = self._copy_headers(kwargs, 'dropbox-api-arg', 'content-type')
 
         assert '_b' in kwargs, "Missing body value '_b'"
         body = kwargs.pop('_b')
         assert isinstance(body, bytes), "Expected '_b' to be a bytestring, but got {!r}".format(body)
 
-        headers['Dropbox-API-Arg'] = json.dumps(kwargs, ensure_ascii=True)
+        api_arg = self._make_api_arg(args, kwargs)
+        headers['Dropbox-API-Arg'] = json.dumps(api_arg, ensure_ascii=True)
         headers['Content-Type'] = 'application/octet-stream'
 
         with self._request('POST', function, headers, body=body) as r:
@@ -80,13 +98,14 @@ class Host(object):
                 return self._handle_json_body(r)
             return self._handle_error(r)
 
-    def down(self, function, **kwargs):
+    def down(self, function, *args, **kwargs):
         headers = self._copy_headers(kwargs, 'Accept')
         headers['Accept'] = 'application/vnd.dropbox-cors-hack'
 
         assert '_b' not in kwargs, "Not expecting body value '_b'"
 
-        url_params = {'arg': json.dumps(kwargs, ensure_ascii=False).encode('utf-8')}
+        api_arg = self._make_api_arg(args, kwargs)
+        url_params = {'arg': json.dumps(api_arg, ensure_ascii=False).encode('utf-8')}
 
         with self._request('GET', function, headers, url_params=url_params) as r:
             if r.status == 200:
