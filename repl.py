@@ -132,6 +132,12 @@ class Host(object):
         if url_params is not None:
             url_path = url_path + '?' + urlparse.urlencode(list(url_params.items()))
 
+        # Py2.7 expects byte strings, Py3+ expects unicode strings.
+        if str == bytes:
+            method = method.encode('ascii')
+            url_path = url_path.encode('ascii')
+            headers = {k.encode('ascii'): v.encode('ascii') for k, v in headers.items()}
+
         c = httplib.HTTPSConnection(self.hostname)
         c.request(method, url_path, body, headers)
         return contextlib.closing(c.getresponse())
