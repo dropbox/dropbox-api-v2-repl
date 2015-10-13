@@ -56,15 +56,15 @@ class Host(object):
     def _make_api_arg(cls, args, kwargs):
         if len(args) == 0:
             if len(kwargs) == 0:
-                return None
-            return kwargs
+                return False, None
+            return True, kwargs
         elif len(args) == 1:
             arg = args[0]
             if len(kwargs) != 0:
                 raise AssertionError(
                     "You provided an explicit argument {!r} as well as keyword-style arguments "
                     "{!r}.  You can't provide both.".format(arg, kwargs))
-            return arg
+            return True, arg
         else:
             raise AssertionError("Too many non-keyword arguments: {!r}".format(args))
 
@@ -73,9 +73,12 @@ class Host(object):
 
         assert '_b' not in kwargs, "Not expecting body value '_b'"
 
-        headers['Content-Type'] = 'application/json'
-        api_arg = self._make_api_arg(args, kwargs)
-        body = json.dumps(api_arg, ensure_ascii=False).encode('utf-8')
+        include_arg, api_arg = self._make_api_arg(args, kwargs)
+        if include_arg:
+            headers['Content-Type'] = 'application/json'
+            body = json.dumps(api_arg, ensure_ascii=False).encode('utf-8')
+        else:
+            body = b''
 
         with self._request('POST', function, headers, body=body) as r:
             if r.status == 200:
@@ -89,8 +92,9 @@ class Host(object):
         body = kwargs.pop('_b')
         assert isinstance(body, bytes), "Expected '_b' to be a bytestring, but got {!r}".format(body)
 
-        api_arg = self._make_api_arg(args, kwargs)
-        headers['Dropbox-API-Arg'] = json.dumps(api_arg, ensure_ascii=True)
+        include_arg, api_arg = self._make_api_arg(args, kwargs)
+        if include_arg:
+            headers['Dropbox-API-Arg'] = json.dumps(api_arg, ensure_ascii=True)
         headers['Content-Type'] = 'application/octet-stream'
 
         with self._request('POST', function, headers, body=body) as r:
@@ -104,8 +108,9 @@ class Host(object):
 
         assert '_b' not in kwargs, "Not expecting body value '_b'"
 
-        api_arg = self._make_api_arg(args, kwargs)
-        url_params = {'arg': json.dumps(api_arg, ensure_ascii=False).encode('utf-8')}
+        include_arg, api_arg = self._make_api_arg(args, kwargs)
+        if include_arg:
+            url_params = {'arg': json.dumps(api_arg, ensure_ascii=False).encode('utf-8')}
 
         with self._request('GET', function, headers, url_params=url_params) as r:
             if r.status == 200:
