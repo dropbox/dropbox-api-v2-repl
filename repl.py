@@ -181,7 +181,7 @@ class Response400(object):
         self.error_message = error_message
 
     def __repr__(self):
-        return "HTTP 400: {}".format(self.error_message)
+        return "HTTP 400: {}".format(json.dumps(self.error_message))
 
 class Response(object):
     def __init__(self, status, headers, result=None, content=None):
@@ -195,7 +195,7 @@ class Response(object):
         for key, value in self.headers.items():
             r.append("{}: {!r}".format(key, value))
         if self.result is not None:
-            r.append(json.dumps(self.result, ensure_ascii=False, indent=4))
+            r.append(json.dumps(self.result, indent=4))
         if self.content is not None:
             r.append("<{} bytes> {!r}".format(len(self.content), self.content[:50]))
         return '\n'.join(r)
