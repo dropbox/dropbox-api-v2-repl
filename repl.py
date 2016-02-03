@@ -94,7 +94,7 @@ class Host(object):
 
         include_arg, api_arg = self._make_api_arg(args, kwargs)
         if include_arg:
-            headers['Dropbox-API-Arg'] = json.dumps(api_arg, ensure_ascii=True)
+            headers['Dropbox-API-Arg'] = json.dumps(api_arg, ensure_ascii=False)
         headers['Content-Type'] = 'application/octet-stream'
 
         with self._request('POST', function, headers, body=body) as r:
@@ -113,11 +113,13 @@ class Host(object):
             url_params = {'arg': json.dumps(api_arg, ensure_ascii=False).encode('utf-8')}
 
         with self._request('GET', function, headers, url_params=url_params) as r:
-            if r.status == 200:
+            if r.status in (200, 206):
                 result_str = r.getheader('Dropbox-API-Result').encode('ascii')
                 assert result_str is not None, "Missing Dropbox-API-Result response header."
                 result = json_loads_ordered(result_str)
-                return Response(200, extract_headers(r, "ETag", "Cache-Control"), result, r.read())
+                headers = extract_headers(r,
+                        "ETag", "Cache-Control", "Original-Content-Length", "Content-Range")
+                return Response(r.status, headers, result, r.read())
             if r.status == 304:
                 return Response(304, extract_headers(r, "ETag", "Cache-Control"))
             return self._handle_error(r)
