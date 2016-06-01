@@ -135,7 +135,7 @@ class Host(object):
         return headers
 
     def _request(self, method, function, headers, url_params=None, body=None):
-        url_path = "/2-beta-2/{}".format(urlparse.quote(function))
+        url_path = "/2/{}".format(urlparse.quote(function))
         if url_params is not None:
             url_path = url_path + '?' + urlparse.urlencode(list(url_params.items()))
 
