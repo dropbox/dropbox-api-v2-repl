@@ -195,7 +195,7 @@ class Response(object):
     def __repr__(self):
         r = ["HTTP {}".format(self.status)]
         for key, value in self.headers:
-            r.append("{}: {!r}".format(key, value))
+            r.append("{}: {}".format(key, devq(value)))
         if self.result is not None:
             r.append(json.dumps(self.result, indent=4))
         if self.content is not None:
@@ -257,7 +257,12 @@ class AuthJsonLoadError(Exception):
     pass
 
 def devq(s):
-    assert isinstance(s, unicode), repr(s)
+    if isinstance(s, bytes):
+        s = s.decode('ascii')
+    elif isinstance(s, unicode):
+        pass
+    else:
+        raise AssertionError("bad type: {!r}".format(s))
     return json.dumps(s)
 
 def devql(l):
