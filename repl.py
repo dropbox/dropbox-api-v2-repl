@@ -82,7 +82,7 @@ class Host(object):
 
         with self._request('POST', function, headers, body=body) as r:
             if r.status == 200:
-                return self._handle_json_body(r, {})
+                return self._handle_json_body(r, ())
             return self._handle_error(r)
 
     def up(self, function, *args, **kwargs):
@@ -99,7 +99,7 @@ class Host(object):
 
         with self._request('POST', function, headers, body=body) as r:
             if r.status == 200:
-                return self._handle_json_body(r, {})
+                return self._handle_json_body(r, ())
             return self._handle_error(r)
 
     def down(self, function, *args, **kwargs):
@@ -177,8 +177,13 @@ def json_loads_ordered(s):
     return json.JSONDecoder(object_pairs_hook=collections.OrderedDict).decode(u)
 
 def extract_headers(r, *targets):
-    s = set(t.lower() for t in targets)
-    return {k: v.encode('ascii') for k, v in r.getheaders() if k.lower() in s}
+    targets_lower = {t.lower(): t for t in targets}
+    h = []
+    for k, v in r.getheaders():
+        t = targets_lower.get(k.lower())
+        if t is not None:
+            h.append((t, v.encode('ascii')))
+    return h
 
 class Response(object):
     def __init__(self, status, headers, result=None, content=None):
@@ -189,7 +194,7 @@ class Response(object):
 
     def __repr__(self):
         r = ["HTTP {}".format(self.status)]
-        for key, value in self.headers.items():
+        for key, value in self.headers:
             r.append("{}: {!r}".format(key, value))
         if self.result is not None:
             r.append(json.dumps(self.result, indent=4))
