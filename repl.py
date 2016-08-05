@@ -82,7 +82,7 @@ class Host(object):
 
         with self._request('POST', function, headers, body=body) as r:
             if r.status == 200:
-                return self._handle_json_body(r)
+                return self._handle_json_body(r, {})
             return self._handle_error(r)
 
     def up(self, function, *args, **kwargs):
@@ -99,7 +99,7 @@ class Host(object):
 
         with self._request('POST', function, headers, body=body) as r:
             if r.status == 200:
-                return self._handle_json_body(r)
+                return self._handle_json_body(r, {})
             return self._handle_error(r)
 
     def down(self, function, *args, **kwargs):
@@ -149,22 +149,26 @@ class Host(object):
         c.request(method, url_path, body, headers)
         return contextlib.closing(c.getresponse())
 
-    def _handle_json_body(self, r):
+    def _handle_json_body(self, r, headers):
         ct = r.getheader('Content-Type').encode('ascii')
         assert ct == b'application/json', "Bad Content-Type: {!r}".format(ct)
-        return Response(r.status, {}, json_loads_ordered(r.read()))
+        return Response(r.status, headers, json_loads_ordered(r.read()))
 
     def _handle_error(self, r):
         if r.status == 400:
             ct = r.getheader('Content-Type').encode('ascii')
             assert ct == b'text/plain; charset=utf-8', "Bad Content-Type: {!r}".format(ct)
-            return Response400(r.read().decode('utf-8'))
+            headers = extract_headers(r, "X-Dropbox-Request-Id")
+            return Response(r.status, headers, r.read().decode('utf-8'))
         if r.status in (401, 403, 404, 409):
-            return self._handle_json_body(r)
+            headers = extract_headers(r, "X-Dropbox-Request-Id")
+            return self._handle_json_body(r, headers)
         if r.status == 429:
-            return Response(r.status, extract_headers(r, "Retry-After"))
+            headers = extract_headers(r, "Retry-After", "X-Dropbox-Request-Id")
+            return Response(r.status, headers)
         if r.status in (500, 503):
-            return Response(r.status, {})
+            headers = extract_headers(r, "X-Dropbox-Request-Id")
+            return Response(r.status, headers)
         raise AssertionError("unexpected response code: {!r}, {!r}".format(r.status, r.read()))
 
 def json_loads_ordered(s):
@@ -175,13 +179,6 @@ def json_loads_ordered(s):
 def extract_headers(r, *targets):
     s = set(t.lower() for t in targets)
     return {k: v.encode('ascii') for k, v in r.getheaders() if k.lower() in s}
-
-class Response400(object):
-    def __init__(self, error_message):
-        self.error_message = error_message
-
-    def __repr__(self):
-        return "HTTP 400: {}".format(json.dumps(self.error_message))
 
 class Response(object):
     def __init__(self, status, headers, result=None, content=None):
