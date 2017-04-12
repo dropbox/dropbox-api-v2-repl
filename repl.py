@@ -94,7 +94,7 @@ class Host(object):
 
         include_arg, api_arg = self._make_api_arg(args, kwargs)
         if include_arg:
-            headers['Dropbox-API-Arg'] = json.dumps(api_arg, ensure_ascii=False)
+            headers['Dropbox-API-Arg'] = json.dumps(api_arg, ensure_ascii=True)
         headers['Content-Type'] = 'application/octet-stream'
 
         with self._request('POST', function, headers, body=body) as r:
