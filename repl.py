@@ -103,8 +103,7 @@ class Host(object):
             return self._handle_error(r)
 
     def down(self, function, *args, **kwargs):
-        headers = self._copy_headers(kwargs, 'Accept')
-        headers['Accept'] = 'application/vnd.dropbox-cors-hack'
+        headers = self._copy_headers(kwargs)
 
         assert '_b' not in kwargs, "Not expecting body value '_b'"
 
